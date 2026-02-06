@@ -139,4 +139,20 @@
  */
 #define OPTEE_RPC_CMD_RPMB_FRAMES	24
 
+/*
+ * Borrow memory
+ *
+ * [in]    value[0].a	    Requested size
+ * [in]    value[0].b	    Required alignment
+ * [out]   memref[0]	    Buffer
+ */
+#define OPTEE_RPC_CMD_MEM_BORROW	31
+
+/*
+ * Return borrowed memory
+ *
+ * [in]     value[0].a	    Value of shared memory reference or cookie
+ */
+#define OPTEE_RPC_CMD_MEM_RETURN	32
+
 #endif /*__OPTEE_RPC_CMD_H*/

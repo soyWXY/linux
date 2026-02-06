@@ -767,6 +767,71 @@ bad:
 	tee_shm_free(shm);
 }
 
+static void handle_rpc_func_cmd_mem_borrow(struct tee_context *ctx,
+					  struct optee_msg_arg *arg)
+{
+	struct tee_shm *shm;
+	size_t sz;
+	size_t align;
+	phys_addr_t pa;
+
+	arg->ret_origin = TEEC_ORIGIN_COMMS;
+
+	if (!arg->num_params ||
+	    arg->params[0].attr != OPTEE_MSG_ATTR_TYPE_VALUE_INPUT) {
+		arg->ret = TEEC_ERROR_BAD_PARAMETERS;
+		return;
+	}
+
+	for (int n = 1; n < arg->num_params; n++) {
+		if (arg->params[n].attr != OPTEE_MSG_ATTR_TYPE_NONE) {
+			arg->ret = TEEC_ERROR_BAD_PARAMETERS;
+			return;
+		}
+	}
+
+	sz = arg->params[0].u.value.a;
+	align = arg->params[0].u.value.b;
+	shm = tee_shm_alloc_mem_to_lend(ctx, sz, align);
+	if (IS_ERR(shm)) {
+		arg->ret = shm == ERR_PTR(-EINVAL) ? TEEC_ERROR_BAD_PARAMETERS :
+						 TEEC_ERROR_OUT_OF_MEMORY;
+		return;
+	}
+
+	if (tee_shm_get_pa(shm, 0, &pa)) {
+		arg->ret = TEEC_ERROR_BAD_PARAMETERS;
+		goto bad;
+	}
+
+	arg->params[0].attr = OPTEE_MSG_ATTR_TYPE_TMEM_OUTPUT;
+	arg->params[0].u.tmem.buf_ptr = pa;
+	arg->params[0].u.tmem.size = tee_shm_get_size(shm);
+	arg->params[0].u.tmem.shm_ref = (unsigned long)shm;
+
+	arg->ret = TEEC_SUCCESS;
+	return;
+bad:
+	tee_shm_free(shm);
+}
+
+static void handle_rpc_func_cmd_mem_return(struct optee_msg_arg *arg)
+{
+	struct tee_shm *shm;
+
+	arg->ret_origin = TEEC_ORIGIN_COMMS;
+
+	if (arg->num_params != 1 ||
+	    arg->params[0].attr != OPTEE_MSG_ATTR_TYPE_VALUE_INPUT) {
+		arg->ret = TEEC_ERROR_BAD_PARAMETERS;
+		return;
+	}
+
+	shm = (struct tee_shm *)(unsigned long)arg->params[0].u.value.a;
+	tee_shm_free(shm);
+	arg->ret = TEEC_SUCCESS;
+}
+
 static void free_pages_list(struct optee_call_ctx *call_ctx)
 {
 	if (call_ctx->pages_list) {
@@ -794,6 +859,12 @@ static void handle_rpc_func_cmd(struct tee_context *ctx, struct optee *optee,
 		break;
 	case OPTEE_RPC_CMD_SHM_FREE:
 		handle_rpc_func_cmd_shm_free(ctx, arg);
+		break;
+	case OPTEE_RPC_CMD_MEM_BORROW:
+		handle_rpc_func_cmd_mem_borrow(ctx, arg);
+		break;
+	case OPTEE_RPC_CMD_MEM_RETURN:
+		handle_rpc_func_cmd_mem_return(arg);
 		break;
 	default:
 		optee_rpc_cmd(ctx, optee, arg);
