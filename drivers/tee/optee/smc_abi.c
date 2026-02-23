@@ -772,6 +772,7 @@ static void handle_rpc_func_cmd_mem_borrow(struct tee_context *ctx,
 {
 	struct tee_shm *shm;
 	size_t sz;
+	size_t page_count;
 	size_t align;
 	phys_addr_t pa;
 
@@ -791,8 +792,9 @@ static void handle_rpc_func_cmd_mem_borrow(struct tee_context *ctx,
 	}
 
 	sz = arg->params[0].u.value.a;
+	page_count = DIV_ROUND_UP_ULL(sz, PAGE_SIZE);
 	align = arg->params[0].u.value.b;
-	shm = tee_shm_alloc_mem_to_lend(ctx, sz, align);
+	shm = tee_shm_alloc_dma_mem(ctx, page_count);
 	if (IS_ERR(shm)) {
 		arg->ret = shm == ERR_PTR(-EINVAL) ? TEEC_ERROR_BAD_PARAMETERS :
 						 TEEC_ERROR_OUT_OF_MEMORY;

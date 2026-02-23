@@ -56,14 +56,12 @@ static void tee_shm_release(struct tee_device *teedev, struct tee_shm *shm)
 	void *p = shm;
 
 	if (shm->flags & TEE_SHM_DMA_MEM) {
-#if IS_ENABLED(CONFIG_TEE_DMABUF_HEAPS)
 		struct tee_shm_dma_mem *dma_mem;
 
 		dma_mem = container_of(shm, struct tee_shm_dma_mem, shm);
 		p = dma_mem;
 		dma_free_pages(&teedev->dev, shm->size, dma_mem->page,
 			       dma_mem->dma_addr, DMA_BIDIRECTIONAL);
-#endif
 	} else if (shm->flags & TEE_SHM_DMA_BUF) {
 		struct tee_shm_dmabuf_ref *ref;
 
@@ -80,9 +78,6 @@ static void tee_shm_release(struct tee_device *teedev, struct tee_shm *shm)
 				"unregister shm %p failed: %d", shm, rc);
 
 		release_registered_pages(shm);
-	} else if (shm->flags & TEE_SHM_LENT) {
-		free_pages_exact(shm->kaddr, shm->size);
-		shm->kaddr = NULL;
 	}
 
 	teedev_ctx_put(shm->ctx);
@@ -288,62 +283,6 @@ struct tee_shm *tee_shm_alloc_priv_buf(struct tee_context *ctx, size_t size)
 EXPORT_SYMBOL_GPL(tee_shm_alloc_priv_buf);
 
 /**
- * tee_shm_alloc_mem_to_lend() - Allocate contiguous memory as shared memory object
- * @ctx:	Context that allocates the shared memory
- * @size:	Requested size of shared memory
- * @align:	Required alignment for shared memory
- *
- * The allocated memory is expected to be lent (made inaccessible to the
- * kernel) to the TEE while it's used and returned (accessible to the
- * kernel again) before it's freed.
- *
- * This function should normally only be used internally in the TEE
- * drivers.
- *
- * @returns a pointer to 'struct tee_shm'
- */
-struct tee_shm *tee_shm_alloc_mem_to_lend(struct tee_context *ctx, size_t size, size_t align)
-{
-	struct tee_device *teedev = ctx->teedev;
-	struct tee_shm *shm;
-	void *ret;
-
-	if (PAGE_SIZE % align)
-		return ERR_PTR(-EINVAL);
-
-	if (!tee_device_get(teedev))
-		return ERR_PTR(-EINVAL);
-
-	shm = kzalloc(sizeof(*shm), GFP_KERNEL);
-	if (!shm) {
-		ret = ERR_PTR(-ENOMEM);
-		goto err_dev_put;
-	}
-
-	size = roundup(size, PAGE_SIZE);
-	shm->kaddr = alloc_pages_exact(size, GFP_KERNEL);
-	if (!shm->kaddr) {
-		ret = ERR_PTR(-ENOMEM);
-		goto err_kfree;
-	}
-	refcount_set(&shm->refcount, 1);
-	shm->ctx = ctx;
-	shm->paddr = virt_to_phys(shm->kaddr);
-	shm->size = size;
-	shm->flags = TEE_SHM_LENT;
-
-	teedev_ctx_get(ctx);
-	return shm;
-err_kfree:
-	kfree(shm);
-err_dev_put:
-	tee_device_put(teedev);
-	return ret;
-}
-EXPORT_SYMBOL_GPL(tee_shm_alloc_mem_to_lend);
-
-#if IS_ENABLED(CONFIG_TEE_DMABUF_HEAPS)
-/**
  * tee_shm_alloc_dma_mem() - Allocate DMA memory as shared memory object
  * @ctx:	Context that allocates the shared memory
  * @page_count:	Number of pages
@@ -398,14 +337,6 @@ err_put_teedev:
 	return ERR_PTR(-ENOMEM);
 }
 EXPORT_SYMBOL_GPL(tee_shm_alloc_dma_mem);
-#else
-struct tee_shm *tee_shm_alloc_dma_mem(struct tee_context *ctx,
-				      size_t page_count)
-{
-	return ERR_PTR(-EINVAL);
-}
-EXPORT_SYMBOL_GPL(tee_shm_alloc_dma_mem);
-#endif
 
 int tee_dyn_shm_alloc_helper(struct tee_shm *shm, size_t size, size_t align,
 			     int (*shm_register)(struct tee_context *ctx,

@@ -31,7 +31,6 @@
 #define TEE_SHM_DMA_BUF		BIT(4)	/* Memory with dma-buf handle */
 #define TEE_SHM_DMA_MEM		BIT(5)	/* Memory allocated with */
 					/* dma_alloc_pages() */
-#define TEE_SHM_LENT		BIT(6)  /* Memory lent to TEE */
 
 #define TEE_DEVICE_FLAG_REGISTERED	0x1
 #define TEE_MAX_DEV_NAME_LEN		32
@@ -329,8 +328,6 @@ void *tee_get_drvdata(struct tee_device *teedev);
  * @returns a pointer to 'struct tee_shm' on success or an ERR_PTR on failure
  */
 struct tee_shm *tee_shm_alloc_priv_buf(struct tee_context *ctx, size_t size);
-
-struct tee_shm *tee_shm_alloc_mem_to_lend(struct tee_context *ctx, size_t size, size_t align);
 
 struct tee_shm *tee_shm_alloc_dma_mem(struct tee_context *ctx,
 				      size_t page_count);
